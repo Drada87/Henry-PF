@@ -1,0 +1,20 @@
+ NBA_Datos/csv/*
+
+csv_Tf_henry/common_player_info.csv
+csv_Tf_henry/draft_combine_stats.csv
+csv_Tf_henry/draft_history.csv
+csv_Tf_henry/game_info.csv
+csv_Tf_henry/game_summary.csv
+csv_Tf_henry/game.csv
+csv_Tf_henry/inactive_players.csv
+csv_Tf_henry/line_score.csv
+csv_Tf_henry/mvps.csv
+csv_Tf_henry/officials.csv
+csv_Tf_henry/other_stats.csv
+csv_Tf_henry/play_by_play.csv
+csv_Tf_henry/player.csv
+csv_Tf_henry/salarios_nba_2013_2023.csv
+csv_Tf_henry/salarios_nba_final_player.csv
+csv_Tf_henry/team_details.csv
+csv_Tf_henry/team_history.csv
+csv_Tf_henry/team.csv
