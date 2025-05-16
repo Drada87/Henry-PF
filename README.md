@@ -6,7 +6,7 @@
 
 ## 👥 Equipo
 
-**StoryTelling Data Analytics** – Un equipo de 3 analistas de datos:
+**StoryTelling Data Analytics** 
 
 - David Rada  
 - Iván Hernández  
