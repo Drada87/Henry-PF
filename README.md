@@ -23,7 +23,7 @@ Nos enfocamos en detectar oportunidades de mejora a partir del análisis de juga
 
 ## 🛠 Tecnologías utilizadas
 
-- Google Cloud SQL (PostgreSQL)
+- Google Cloud SQL (SQLserver)
 - DBeaver
 - Python  
   - Pandas  
