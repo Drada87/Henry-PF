@@ -27,8 +27,7 @@ Nos enfocamos en detectar oportunidades de mejora a partir del análisis de juga
 - DBeaver
 - Python  
   - Pandas  
-  - NumPy  
-  - psycopg2  
+  - NumPy   
 - Jupyter Notebook  
 - GitHub
 
@@ -37,7 +36,7 @@ Nos enfocamos en detectar oportunidades de mejora a partir del análisis de juga
 ## ⚙️ Metodología aplicada en Sprint 1
 
 - Diseño de modelo entidad-relación  
-- Creación de instancia PostgreSQL en Google Cloud  
+- Creación de instancia en Google Cloud  
 - Desarrollo de scripts SQL para la creación de tablas  
 - Análisis exploratorio inicial con Pandas  
 - Automatización de scraping para datos de salarios y MVPs  
@@ -93,6 +92,6 @@ DOCS/    → presentaciones y documentación adicional
 - Repositorio configurado y compartido  
 - Datos recopilados y limpiados  
 - Base de datos en la nube funcional  
-- Conexión verificada desde Python y DBeaver  
+- Conexión verificada desde Python 
 - Proceso de scraping automatizable validado  
 - Estructura de trabajo colaborativa establecida
