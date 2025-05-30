@@ -1,0 +1,143 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "ef94c23a",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import requests\n",
+    "from bs4 import BeautifulSoup\n",
+    "import pandas as pd\n",
+    "import os"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "15220f1a",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "years = list(range(2013,2024))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "a180b535",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "player_stats_url = \"https://www.basketball-reference.com/leagues/NBA_{}_per_game.html\"\n",
+    "\n",
+    "for year in years:\n",
+    "    url = player_stats_url.format(year)\n",
+    "    \n",
+    "    data = requests.get(url)\n",
+    "    \n",
+    "    with open(\"player/{}.html\".format(year), \"w+\") as f:\n",
+    "        f.write(data.text)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "944c829a",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from selenium import webdriver\n",
+    "from selenium.webdriver.chrome.service import Service\n",
+    "from selenium.webdriver.common.keys import Keys\n",
+    "import time\n",
+    "import os\n",
+    "\n",
+    "# Ruta al chromedriver\n",
+    "chrome_driver_path = r\"C:\\Users\\manus\\Desktop\\chromedriver-win32\\chromedriver.exe\"\n",
+    "\n",
+    "# Crear el servicio\n",
+    "service = Service(executable_path=chrome_driver_path)\n",
+    "\n",
+    "# Inicializar el driver con el servicio\n",
+    "driver = webdriver.Chrome(service=service)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "9c983d20",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "for year in years:\n",
+    "    url = player_stats_url.format(year)\n",
+    "    \n",
+    "    driver.get(url)\n",
+    "    driver.execute_script(\"window.scrollTo(1,10000)\")\n",
+    "    time.sleep(2)\n",
+    "    \n",
+    "    with open(\"player/{}.html\".format(year), \"w+\", encoding=\"utf-8\") as f:\n",
+    "        f.write(driver.page_source)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "9ff58f18",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dfs = []\n",
+    "for year in years:\n",
+    "    with open(\"player/{}.html\".format(year), encoding=\"utf-8\") as f:\n",
+    "        page = f.read()\n",
+    "    \n",
+    "    soup = BeautifulSoup(page, 'html.parser')\n",
+    "    soup.find('tr', class_=\"thead\").decompose()\n",
+    "    player_table = soup.find_all(id=\"per_game_stats\")[0]\n",
+    "    player_df = pd.read_html(str(player_table))[0]\n",
+    "    player_df[\"Year\"] = year\n",
+    "    dfs.append(player_df)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "0d562537",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "players = pd.concat(dfs)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "8b15fe2f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "players.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "0db82d24",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "players.to_csv(\"players.csv\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "language_info": {
+   "name": "python"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
