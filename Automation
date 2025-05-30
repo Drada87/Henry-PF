@@ -1,0 +1,446 @@
+# automation_team.py
+
+import os
+import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
+from dotenv import load_dotenv
+import zipfile
+from kaggle.api.kaggle_api_extended import KaggleApi
+import shutil
+
+# ------------------- Cargar entorno y conexión -------------------
+
+load_dotenv()
+
+server = os.getenv("SQL_SERVER")
+database = os.getenv("SQL_DATABASE")
+username = os.getenv("SQL_USER")
+password = os.getenv("SQL_PASSWORD")
+
+connection_string = f"mssql+pyodbc://{username}:{password}@{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server"
+engine = create_engine(connection_string)
+
+# ------------------- Descargar dataset desde Kaggle -------------------
+
+def descargar_dataset():
+    api = KaggleApi()
+    api.authenticate()
+    api.dataset_download_files('wyattowalsh/basketball', path='data', unzip=True)
+
+# ------------------- Procesar y limpiar team.csv -------------------
+
+def limpiar_team(path_csv):
+    df = pd.read_csv(path_csv)
+
+    # Conversión de tipos
+    df['id'] = df['id'].astype('int64')
+    df['year_founded'] = df['year_founded'].astype('int16')
+    cols_texto = ['full_name', 'abbreviation', 'nickname', 'city', 'state']
+    df[cols_texto] = df[cols_texto].astype(str).fillna('')
+
+    return df
+
+def limpiar_teams_details(path_csv):
+    import pandas as pd
+
+    df = pd.read_csv(path_csv)
+
+    # Eliminar columnas no necesarias
+    columnas_a_eliminar = ['yearfounded', 'city', 'facebook', 'instagram', 'twitter']
+    df.drop(columns=[col for col in columnas_a_eliminar if col in df.columns], inplace=True)
+
+    # Rellenar nulos y convertir tipos
+    df['arena'] = df['arena'].fillna('Sin información').astype(str)
+    df['arenacapacity'] = df['arenacapacity'].fillna(0).astype(int)
+    df['owner'] = df['owner'].fillna('Sin información').astype(str)
+    df['generalmanager'] = df['generalmanager'].fillna('Sin información').astype(str)
+    df['headcoach'] = df['headcoach'].fillna('Sin información').astype(str)
+    df['dleagueaffiliation'] = df['dleagueaffiliation'].fillna('Sin información').astype(str)
+
+    return df
+
+# Creo la función de limpieza para game_info.csv basada en lo que envió el usuario
+
+def limpiar_game_info(path_csv):
+    import pandas as pd
+
+    df = pd.read_csv(path_csv)
+
+    # Eliminar duplicados
+    df = df.drop_duplicates()
+
+    # Convertir tipos de columnas
+    df['game_id'] = df['game_id'].astype('int64')
+    df['game_date'] = df['game_date'].astype(str)
+    df['attendance'] = df['attendance'].fillna(0).astype(int)
+
+    # Limpiar 'game_time'
+    df['game_time'] = df['game_time'].replace(['', None, '0.0', 0], '0:00')
+    df['game_time'] = df['game_time'].astype(str).str.replace(r'[^0-9:\-]', '', regex=True)
+    df['game_time'] = df['game_time'].replace('', '0:00')
+
+    return df
+
+def limpiar_draft_combine(path_csv):
+    df = pd.read_csv(path_csv)
+
+    # Eliminar columnas innecesarias
+    columnas_utiles = [
+        'season', 'player_id', 'first_name', 'last_name',
+        'position', 'height_wo_shoes', 'height_w_shoes',
+        'weight', 'wingspan', 'standing_reach'
+    ]
+    df = df[[col for col in columnas_utiles if col in df.columns]]
+
+    # Eliminar duplicados
+    df = df.drop_duplicates()
+
+    # Reemplazar nulos y convertir tipos
+    df['position'] = df['position'].fillna('').astype(str)
+    df['height_wo_shoes'] = df['height_wo_shoes'].astype(float)
+    df['height_w_shoes'] = df['height_w_shoes'].astype(float)
+    df['weight'] = df['weight'].astype(float)
+    df['wingspan'] = df['wingspan'].astype(float)
+    df['standing_reach'] = df['standing_reach'].astype(float)
+    df['season'] = df['season'].astype(int)
+    df['player_id'] = df['player_id'].astype('int64')
+    df['first_name'] = df['first_name'].astype(str)
+    df['last_name'] = df['last_name'].astype(str)
+
+    # Filtrar solo los player_id que existan en d_common_player
+    ids_validos = pd.read_sql("SELECT person_id FROM d_common_player", engine)
+    ids_set = set(ids_validos['person_id'])
+    df = df[df['player_id'].isin(ids_set)]
+
+    return df
+
+
+
+def limpiar_draft_history(path_csv):
+    import pandas as pd
+
+    df = pd.read_csv(path_csv)
+
+    # Conversión de tipos obligatorios
+    df['person_id'] = df['person_id'].astype('int64')
+    df['player_name'] = df['player_name'].astype(str)
+    df['season'] = df['season'].astype('int64')
+    df['round_number'] = df['round_number'].astype('int64')
+    df['round_pick'] = df['round_pick'].astype('int64')
+    df['overall_pick'] = df['overall_pick'].astype('int64')
+    df['draft_type'] = df['draft_type'].astype(str)
+    df['team_id'] = df['team_id'].astype('int64')
+    df['team_city'] = df['team_city'].astype(str)
+    df['team_name'] = df['team_name'].astype(str)
+    df['team_abbreviation'] = df['team_abbreviation'].astype(str)
+
+    # Columnas con posibles nulos
+    df['organization'] = df['organization'].fillna('').astype(str)
+    df['organization_type'] = df['organization_type'].fillna('').astype(str)
+
+    # Asegurar tipo booleano
+    df['player_profile_flag'] = df['player_profile_flag'].astype(bool)
+
+    return df
+
+def limpiar_inactive_players(path_csv):
+    import pandas as pd
+
+    df = pd.read_csv(path_csv)
+
+    # Eliminar columna no necesaria
+    if 'jersey_num' in df.columns:
+        df.drop(columns=['jersey_num'], inplace=True)
+
+    # Convertir claves foráneas a BIGINT
+    df['game_id'] = df['game_id'].astype('int64')
+    df['player_id'] = df['player_id'].astype('int64')
+    df['team_id'] = df['team_id'].astype('int64')
+
+    # Definir grupos de columnas según largo esperado
+    cols_str_40 = ['first_name', 'last_name']
+    cols_str_20 = ['team_name']
+    cols_str_30 = ['team_city']
+    cols_str_3 = ['team_abbreviation']
+
+    # Rellenar y convertir a string
+    df[cols_str_40] = df[cols_str_40].fillna('').astype(str)
+    df[cols_str_20] = df[cols_str_20].fillna('').astype(str)
+    df[cols_str_30] = df[cols_str_30].fillna('').astype(str)
+    df[cols_str_3] = df[cols_str_3].fillna('').astype(str)
+
+    return df
+
+def limpiar_game_summary(path_csv):
+    import pandas as pd
+
+    df = pd.read_csv(path_csv)
+
+    # Conservar solo las columnas utilizadas
+    columnas_utilizadas = [
+        'game_id',
+        'game_date_est',
+        'game_sequence',
+        'home_team_id',
+        'visitor_team_id',
+        'season'
+    ]
+    df = df[columnas_utilizadas]
+
+    # Rellenar nulos con 0 (en enteros o fechas faltantes)
+    df = df.fillna(0)
+
+    # Conversión de tipos
+    df['game_id'] = df['game_id'].astype('int64')
+    df['game_sequence'] = df['game_sequence'].astype('int64')
+    df['home_team_id'] = df['home_team_id'].astype('int64')
+    df['visitor_team_id'] = df['visitor_team_id'].astype('int64')
+    df['season'] = df['season'].astype('int64')
+    df['game_date_est'] = df['game_date_est'].astype(str)
+
+    return df
+
+def limpiar_other_stats(path_csv):
+    import pandas as pd
+
+    df = pd.read_csv(path_csv)
+
+    # Conservar solo las columnas utilizadas
+    columnas_utilizadas = [
+        'game_id', 'league_id', 'team_id_home', 'team_abbreviation_home',
+        'pts_paint_home', 'pts_2nd_chance_home', 'pts_fb_home',
+        'largest_lead_home', 'team_id_away'
+    ]
+    df = df[columnas_utilizadas]
+
+    # Ajustar tipos de datos
+    df['game_id'] = df['game_id'].astype('int64')
+    df['league_id'] = df['league_id'].astype(int)
+    df['team_id_home'] = df['team_id_home'].astype('int64')
+    df['team_abbreviation_home'] = df['team_abbreviation_home'].astype(str).str[:3]
+    df['pts_paint_home'] = df['pts_paint_home'].astype(int)
+    df['pts_2nd_chance_home'] = df['pts_2nd_chance_home'].astype(int)
+    df['pts_fb_home'] = df['pts_fb_home'].astype(int)
+    df['largest_lead_home'] = df['largest_lead_home'].astype(int)
+    df['team_id_away'] = df['team_id_away'].astype('int64')
+
+    return df
+
+def limpiar_line_score(path_csv):
+    df = pd.read_csv(path_csv)
+
+    # Renombrar columnas para unificar con el esquema SQL
+    df.rename(columns={
+        'team_id': 'team_id_home',
+        'team_abbreviation': 'team_abbreviation_home',
+        'team_city_name': 'team_city_name_home',
+        'team_nickname': 'team_nickname_home',
+        'team_wins_losses': 'team_wins_losses_home'
+    }, inplace=True)
+
+    # Eliminar duplicados
+    df = df.drop_duplicates()
+
+    # Asegurar tipos de datos
+    df['game_id'] = df['game_id'].astype('int64')
+    df['team_id_home'] = df['team_id_home'].astype('int64')
+    df['team_abbreviation_home'] = df['team_abbreviation_home'].astype(str)
+    df['team_city_name_home'] = df['team_city_name_home'].astype(str)
+    df['team_nickname_home'] = df['team_nickname_home'].astype(str)
+    df['team_wins_losses_home'] = df['team_wins_losses_home'].astype(str)
+
+    # Rellenar NaNs de puntos por cuarto con 0.0
+    cols_pts = ['pts_qtr1', 'pts_qtr2', 'pts_qtr3', 'pts_qtr4']
+    for col in cols_pts:
+        if col in df.columns:
+            df[col] = df[col].fillna(0.0).astype(float)
+
+    return df
+
+
+    
+
+def limpiar_game(path_csv):
+    import pandas as pd
+
+    df = pd.read_csv(path_csv)
+
+    # Seleccionar solo las columnas utilizadas
+    columnas_utilizadas = [
+        'game_id','team_id_home', 'team_name_home',
+        'team_abbreviation_home', 'team_id_away', 'team_name_away',
+        'team_abbreviation_away', 'game_date', 'wl_home', 'matchup_home',
+        'fgm_home', 'fga_home', 'fg_pct_home', 'fg3m_home', 'fg3a_home',
+        'fg3_pct_home', 'ftm_home', 'fta_home', 'ft_pct_home', 'oreb_home',
+        'dreb_home', 'fgm_away', 'fga_away', 'fg_pct_away', 'fg3m_away',
+        'fg3a_away', 'fg3_pct_away', 'ftm_away', 'fta_away', 'ft_pct_away',
+        'oreb_away', 'dreb_away', 'ast_home', 'ast_away', 'stl_home',
+        'stl_away', 'blk_home', 'blk_away', 'tov_home', 'tov_away', 'pf_home',
+        'pf_away', 'pts_home', 'pts_away', 'plus_minus_home', 'plus_minus_away',
+        'min', 'season_type'
+    ]
+    df = df[columnas_utilizadas]
+
+    # Eliminar duplicados
+    df = df.drop_duplicates()
+
+    # Conversión de tipos
+    df['game_id'] = df['game_id'].astype('int64')
+    df['team_id_home'] = df['team_id_home'].astype('int64')
+    df['team_name_home'] = df['team_name_home'].astype(str)
+    df['team_abbreviation_home'] = df['team_abbreviation_home'].astype(str)
+    df['team_id_away'] = df['team_id_away'].astype('int64')
+    df['team_name_away'] = df['team_name_away'].astype(str)
+    df['team_abbreviation_away'] = df['team_abbreviation_away'].astype(str)
+    df['game_date'] = df['game_date'].astype(str)
+    df['wl_home'] = df['wl_home'].astype(str)
+    df['matchup_home'] = df['matchup_home'].astype(str)
+
+    float_cols = [
+        'fgm_home', 'fga_home', 'fg_pct_home', 'fg3m_home', 'fg3a_home', 'fg3_pct_home',
+        'ftm_home', 'fta_home', 'ft_pct_home', 'oreb_home', 'dreb_home',
+        'fgm_away', 'fga_away', 'fg_pct_away', 'fg3m_away', 'fg3a_away', 'fg3_pct_away',
+        'ftm_away', 'fta_away', 'ft_pct_away', 'oreb_away', 'dreb_away',
+        'ast_home', 'ast_away', 'stl_home', 'stl_away', 'blk_home', 'blk_away',
+        'tov_home', 'tov_away', 'pf_home', 'pf_away', 'pts_home', 'pts_away'
+    ]
+    for col in float_cols:
+        df[col] = df[col].astype('float64')
+
+    df['plus_minus_home'] = df['plus_minus_home'].astype(int)
+    df['plus_minus_away'] = df['plus_minus_away'].astype(int)
+    df['min'] = df['min'].astype(int)
+    df['season_type'] = df['season_type'].astype(str)
+
+    return df
+
+
+def limpiar_common_player(path_player_csv, path_common_info_csv):
+    import pandas as pd
+
+    # Cargar los archivos
+    df_player = pd.read_csv(path_player_csv)
+    df_common = pd.read_csv(path_common_info_csv)
+
+    # Normalización de identificadores y nombres para merge
+    df_player['full_name'] = df_player['full_name'].str.lower()
+    df_player['person_id'] = df_player['person_id'].astype(str)
+    df_common['person_id'] = df_common['person_id'].astype(str)
+
+    # Merge de ambos dataframes
+    df_merged = pd.merge(
+        df_player, 
+        df_common, 
+        on='person_id', 
+        how='left', 
+        suffixes=('_player', '_common')
+    )
+
+    # Eliminar columnas redundantes
+    columnas_redundantes = [
+        'full_name_player', 'display_first_last', 
+        'first_name_common', 'last_name_common', 
+        'display_last_comma_first', 'display_fi_last'
+    ]
+    df_merged.drop(columns=[col for col in columnas_redundantes if col in df_merged.columns], inplace=True)
+
+    # Renombrar columna full_name común para mantener consistencia
+    if 'full_name_common' in df_merged.columns:
+        df_merged.rename(columns={'full_name_common': 'full_name'}, inplace=True)
+
+    # Conversión de tipos
+    cols_str = [
+        'full_name', 'birthdate', 'school', 'country', 'last_affiliation',
+        'height', 'position', 'team_name', 'team_abbreviation', 'team_code',
+        'team_city', 'draft_year', 'draft_round', 'draft_number', 'greatest_75_flag'
+    ]
+    df_merged[cols_str] = df_merged[cols_str].fillna('').astype(str)
+
+    df_merged['person_id'] = df_merged['person_id'].astype('int64')
+    df_merged['is_active'] = df_merged['is_active'].fillna(0).astype(int)
+    df_merged['weight'] = df_merged['weight'].fillna(0).astype(int)
+    df_merged['season_exp'] = df_merged['season_exp'].fillna(0.0).astype(float)
+    df_merged['team_id'] = df_merged['team_id'].fillna(0).astype('int64')
+    df_merged['from_year'] = df_merged['from_year'].fillna(0).astype('int16')
+    df_merged['to_year'] = df_merged['to_year'].fillna(0).astype('int16')
+    df_merged['greatest_75_flag'] = df_merged['greatest_75_flag'].replace('', 'N').astype(str)
+
+    return df_merged
+
+def limpiar_team_details(path_csv):
+    import pandas as pd
+
+    df = pd.read_csv(path_csv)
+
+    # Eliminar columnas no necesarias
+    columnas_a_eliminar = ['yearfounded', 'city', 'facebook', 'instagram', 'twitter']
+    df.drop(columns=[col for col in columnas_a_eliminar if col in df.columns], inplace=True)
+
+    # Rellenar nulos y convertir tipos
+    df['arena'] = df['arena'].fillna('Sin información').astype(str)
+    df['arenacapacity'] = df['arenacapacity'].fillna(0).astype(int)
+    df['owner'] = df['owner'].fillna('Sin información').astype(str)
+    df['generalmanager'] = df['generalmanager'].fillna('Sin información').astype(str)
+    df['headcoach'] = df['headcoach'].fillna('Sin información').astype(str)
+    df['dleagueaffiliation'] = df['dleagueaffiliation'].fillna('Sin información').astype(str)
+
+    return df
+
+# ------------------- Verificar datos nuevos -------------------
+
+def verificar_datos_nuevos(df, nombre_tabla):
+    consulta_columna = f"""
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+    WHERE TABLE_NAME = '{nombre_tabla}'
+    """
+    resultado = pd.read_sql(consulta_columna, engine)
+    if resultado.empty:
+        raise Exception(f"No se encontró clave primaria para la tabla {nombre_tabla}")
+
+    columna_clave = resultado["COLUMN_NAME"].iloc[0]
+    ids_existentes = pd.read_sql(f"SELECT {columna_clave} FROM {nombre_tabla}", engine)
+    ids_set = set(ids_existentes[columna_clave])
+    df_nuevos = df[~df[columna_clave].isin(ids_set)]
+    return df_nuevos
+
+# ------------------- Cargar nuevos datos a SQL -------------------
+
+def cargar_a_sql(df, nombre_tabla):
+    try:
+        df_nuevos = verificar_datos_nuevos(df, nombre_tabla)
+        if len(df_nuevos) > 0:
+            df_nuevos.to_sql(nombre_tabla, engine, if_exists='append', index=False)
+            print(f"✅ {len(df_nuevos)} registros nuevos insertados en {nombre_tabla}")
+        else:
+            print(f"🟡 No hay nuevos registros para insertar en {nombre_tabla}")
+    except SQLAlchemyError as e:
+        print(f"❌ Error al cargar en SQL: {e}")
+
+# ------------------- Limpiar carpeta de datos -------------------
+
+def limpiar_directorio():
+    shutil.rmtree("data")
+    os.mkdir("data")
+
+# ------------------- Ejecutar todo -------------------
+
+if __name__ == "__main__":
+    os.makedirs("data", exist_ok=True)
+    descargar_dataset()
+
+        
+    cargar_a_sql(limpiar_team("data/csv/team.csv"), "d_team")
+    cargar_a_sql(limpiar_game_info("data/csv/game_info.csv"), "d_game_info")
+    cargar_a_sql(limpiar_team_details("data/csv/team_details.csv"), "f_team_details")
+    cargar_a_sql(limpiar_draft_combine("data/csv/draft_combine_stats.csv"), "f_draft_combine")
+    cargar_a_sql(limpiar_draft_history("data/csv/draft_history.csv"), "f_draft_history")
+    cargar_a_sql(limpiar_inactive_players("data/csv/inactive_players.csv"), "f_inactive_players")
+    cargar_a_sql(limpiar_game_summary("data/csv/game_summary.csv"), "f_game_summary")
+    cargar_a_sql(limpiar_other_stats("data/csv/other_stats.csv"), "f_other_stats")
+    cargar_a_sql(limpiar_line_score("data/csv/line_score.csv"), "f_line_score")
+    cargar_a_sql(limpiar_game("data/csv/game.csv"), "f_game")
+    cargar_a_sql(limpiar_common_player("data/csv/player.csv", "data/csv/common_player_info.csv"), "d_common_player")
+
+    limpiar_directorio()
